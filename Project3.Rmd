@@ -1,0 +1,585 @@
+---
+title: "Project 3"
+author: "Jennifer Widjaja"
+date: "2024-12-05"
+output: 
+  html_document: default
+  pdf_document: default
+---
+# Exploring Post-Pandemic Inflation and Income Growth in the U.S.
+
+## Introduction 
+Post-pandemic inflation has created significant economic challenges, particularly in essential categories such as Rent and Food & Beverages. This research investigates how inflationary trends in these categories have reshaped household and individual income dynamics in the United States. Building upon Andrew F. Brimmer’s 1971 study, which examined inflation and income distribution during the Vietnam War era, this study focuses on the post-pandemic period (2022–2024). The central research question is: To what extent have post-pandemic inflation trends in essential categories (Rent, Food & Beverages, Medical Care, and Purchasing Power) aligned with or diverged from changes in national household and individual income levels?
+
+This research leverages data from the Bureau of Labor Statistics (BLS) Consumer Price Index (CPI) and the U.S. Census Bureau’s Current Population Survey (CPS). By analyzing these datasets, the goal is to identify the extent to which income growth has lagged behind inflation, exacerbating affordability challenges and potentially contributing to economic inequality in the post-pandemic landscape.
+
+
+## Data Overview
+
+### Data Sources 
+This analysis relies on two primary datasets:
+
+1. Consumer Price Index (CPI):
+- Source: Bureau of Labor Statistics (BLS)
+- Categories: Rent, Food & Beverages, All Items
+- Time Period: 2020–2024
+- Purpose: Measure inflation trends in essential categories.
+
+2. Income Data:
+- Source: U.S. Census Bureau, Current Population Survey (CPS)
+- Variables: Household income (HTOTVAL) and personal income (PTOTVAL)
+- Time Period: 2020–2024
+- Purpose: Track national income trends across households and individuals.
+
+
+### Data and Methods
+The analysis combines CPI data to measure inflation trends across key categories and income data to track household and individual income growth. CPI data was aggregated annually to calculate average trends in categories such as Rent, Food & Beverages, and Purchasing Power. Household and personal income data were similarly processed, with mean values computed for yearly comparisons. While the current dataset provides a robust national-level perspective, it lacks the granularity to explore regional or demographic disparities, which could provide further insight into localized inflationary impacts.
+
+To analyze the relationship between inflation and income growth, a multiple linear regression framework was employed. This allowed for the examination of how inflation in essential categories influences income trends. Additionally, model validation techniques and baseline comparisons were implemented to ensure robustness and assess model performance.
+
+
+
+## Methodology 
+
+The relationship between income growth and inflation was modeled using a multiple linear regression:
+\[
+Y_{\text{Income Growth}, i} = \beta_0 + \beta_1 X_{\text{Rent}, i} + \beta_2 X_{\text{Food \& Beverages}, i} + \beta_3 X_{\text{All Items}, i} + \epsilon
+\]
+Where:
+-  \(Y_{\text{Income Growth}, i}\) represents the growth rate in average household or person-level income for year \(i\).
+-  \(X_{\text{Rent}, i}\), \(X_{\text{Food \& Beverages}, i}\), and \(X_{\text{All Items}, i}\) represent the CPI growth rates for the respective categories.
+-  \(\beta_0\) is the intercept term, and \(\beta_1, \beta_2, \beta_3\) are the coefficients quantifying the impact of each category's CPI growth on income growth.
+- \(\epsilon\) is the error term, accounting for unexplained variation in the data.
+
+### Implementation Steps
+1. Visualization:
+- Line plots were created to compare trends in CPI and income growth rates.
+- Growth rates for each CPI category were overlaid with income growth to highlight gaps.
+2. Regression Analysis:
+- Models were fit separately for household and personal income growth, with CPI categories as predictors.
+- Interaction terms were included to test joint effects of Rent and Food & Beverages inflation.
+3. Validation:
+- Residuals were analyzed to check for patterns and validate model assumptions.
+- Bootstrapping was used to assess the robustness of coefficients.
+4. Baseline Comparison:
+- A baseline model assuming constant income growth was used for comparison.
+
+
+##### Setting up  
+```{r}
+
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(readxl)
+
+
+# Step 1: Load CPI Data
+cpi_data <- read.csv(file = "/Users/jenniferwidjaja/Downloads/fredgraph.csv")
+
+cpi_data <- cpi_data %>%
+  rename(
+    Date = DATE,
+    Rent = CUSR0000SEHA,
+    All_Items = CPIAUCSL,
+    Food_Beverages = CPIFABSL,
+    Purchasing_Power = CUUR0000SA0R,
+    Medical_Care = CPIMEDSL
+  )
+
+# Convert Date to Year
+cpi_data <- cpi_data %>%
+  mutate(Year = as.integer(format(as.Date(Date, format = "%Y-%m-%d"), "%Y")))
+
+# Summarize CPI data by Year
+cpi_summary <- cpi_data %>%
+  group_by(Year) %>%
+  summarise(
+    Average_Rent = mean(Rent, na.rm = TRUE),
+    Average_All_Items = mean(All_Items, na.rm = TRUE),
+    Average_Food_Beverages = mean(Food_Beverages, na.rm = TRUE),
+    Average_Medical_Care = mean(Medical_Care, na.rm = TRUE)
+  )
+
+# View summarized data
+head(cpi_summary)
+
+# Step 2: Load Household Income Data
+hh_data24 <- read.csv(file = "/Users/jenniferwidjaja/Downloads/asecpub24csv/hhpub24.csv")
+hh_data23 <- read.csv(file = "/Users/jenniferwidjaja/Downloads/asecpub23csv/hhpub23.csv")
+hh_data22 <- read.csv(file = "/Users/jenniferwidjaja/Downloads/asecpub22csv/hhpub22.csv")
+hh_data21 <- read.csv(file = "/Users/jenniferwidjaja/Downloads/asecpub21csv/hhpub21.csv")
+hh_data20 <- read.csv(file = "/Users/jenniferwidjaja/Downloads/asecpub20csv/hhpub20.csv")
+
+process_summary <- function(data, year_column, income_column) {
+  data %>%
+    group_by({{ year_column }}) %>%
+    summarise(Average_Household_Income = mean({{ income_column }}, na.rm = TRUE)) %>%
+    rename(Year = {{ year_column }})  # Rename year column for consistency
+}
+
+process_summary1 <- function(data, year_column, income_column) {
+  data %>%
+    group_by({{ year_column }}) %>%
+    summarise(Average_Person_Income = mean({{ income_column }}, na.rm = TRUE)) %>%
+    rename(Year = {{ year_column }})  # Rename year column for consistency
+}
+
+hh_summary_2024 <- process_summary(hh_data24,H_YEAR,HTOTVAL)
+hh_summary_2023 <- process_summary(hh_data23,H_YEAR,HTOTVAL)
+hh_summary_2022 <- process_summary(hh_data22,H_YEAR,HTOTVAL)
+hh_summary_2021 <- process_summary(hh_data21,H_YEAR,HTOTVAL)
+hh_summary_2020 <- process_summary(hh_data20,H_YEAR,HTOTVAL)
+
+hh_summary_combined <- bind_rows(hh_summary_2020, hh_summary_2021, hh_summary_2022, hh_summary_2023, hh_summary_2024)
+hh_summary_combined
+
+
+#Step 3: Load Person Income Data 
+pp_data24 <- read.csv(file = "/Users/jenniferwidjaja/Downloads/asecpub24csv/pppub24.csv")
+pp_data23 <- read.csv(file = "/Users/jenniferwidjaja/Downloads/asecpub23csv/pppub23.csv")
+pp_data22 <- read.csv(file = "/Users/jenniferwidjaja/Downloads/asecpub22csv/pppub22.csv")
+pp_data21 <- read.csv(file = "/Users/jenniferwidjaja/Downloads/asecpub21csv/pppub21.csv")
+pp_data20 <- read.csv(file = "/Users/jenniferwidjaja/Downloads/asecpub20csv/pppub20.csv")
+
+
+pp_summary_2024 <- process_summary1(pp_data24,YYYYMM, PTOTVAL)
+pp_summary_2023 <- process_summary1(pp_data23,YYYYMM, PTOTVAL)
+pp_summary_2022 <- process_summary1(pp_data22,YYYYMM, PTOTVAL)
+pp_summary_2021 <- process_summary1(pp_data21,YYYYMM, PTOTVAL)
+pp_summary_2020 <- process_summary1(pp_data20,YYYYMM, PTOTVAL)
+
+pp_summary_combined <- bind_rows(pp_summary_2020, pp_summary_2021, pp_summary_2022, pp_summary_2023, pp_summary_2024)
+pp_summary_combined <- pp_summary_combined %>%
+  mutate(Year = as.integer(substr(Year, 1, 4)))  # Extract first 4 characters as the year
+pp_summary_combined
+
+
+
+
+combined_pp_hh_data <- merge(pp_summary_combined, hh_summary_combined, by = "Year", all = TRUE)
+combined_pp_hh_data
+
+
+historicalfamtable <- read.csv("/Users/jenniferwidjaja/Downloads/Fam - Sheet1.csv")
+historicalfamtable
+historicalfamtable$All.Married.Couple.in.Labor.Force <- as.integer(gsub(",", "", historicalfamtable$All.Married.Couple.in.Labor.Force))
+historicalfamtable$Husband.and.Wife.in.Labor.Force <-  as.integer(gsub(",", "", historicalfamtable$Husband.and.Wife.in.Labor.Force))
+historicalfamtable$Husband.only.in.labor.force <- as.integer(gsub(",", "", historicalfamtable$Husband.only.in.labor.force))
+historicalfamtable$Wife.only.in.labor.force <- as.integer(gsub(",", "", historicalfamtable$Wife.only.in.labor.force))
+historicalfamtable$Husband.and.wife.both.not.labor.force <- as.integer(gsub(",", "", historicalfamtable$Husband.and.wife.both.not.labor.force))
+
+
+historicalfamtable <- historicalfamtable %>%
+  filter(Year >= 2020 & Year <= 2024)
+
+
+# View filtered data
+print(historicalfamtable)
+
+
+colnames(historicalfamtable)
+
+
+```
+  
+### Visualisation 
+```{r}
+library(ggplot2)
+
+# Plot CPI trends for all categories
+cpi_plot <- ggplot(cpi_summary, aes(x = Year)) +
+  geom_line(aes(y = Average_Rent, color = "Rent"), size = 1) +
+  geom_line(aes(y = Average_All_Items, color = "All Items"), size = 1) +
+  geom_line(aes(y = Average_Food_Beverages, color = "Food & Beverages"), size = 1) +
+  geom_line(aes(y = Average_Medical_Care, color = "Medical Care"), size = 1) +
+  labs(
+    title = "CPI Trends by Category (2020–2024)",
+    x = "Year",
+    y = "CPI Value",
+    color = "Category"
+  ) +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    legend.position = "bottom"
+  )
+
+print(cpi_plot)
+
+
+income_plot <- ggplot(combined_pp_hh_data, aes(x=Year))+
+  geom_line(aes(y = Average_Person_Income, color = "Average Person Income"), size = 1) +
+  geom_line(aes(y = Average_Household_Income, color = "Average Household Income"), size = 1) +
+  labs(
+    title = "Income Trends",
+    x = "Year",
+    y = "Income",
+  ) +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    legend.position = "bottom"
+  )
+  
+print(income_plot)
+
+
+ggplot(historicalfamtable, aes(x = Year)) +
+  geom_line(aes(y = All.Married.Couple.in.Labor.Force, color = "All Married Couples"), size = 1) +
+  geom_line(aes(y = Husband.and.Wife.in.Labor.Force, color = "Husband and Wife"), size = 1) +
+  geom_line(aes(y = Husband.only.in.labor.force, color = "Husband Only"), size = 1) +
+  geom_line(aes(y = Husband.and.wife.both.not.labor.force, color = "Both none"), size = 1) +
+  labs(
+    title = "Trends of Labor Force Status (2020-2023)",
+    x = "Year",
+    y = "Number (in thousands)",
+    color = "Legend"
+  ) +
+  theme_minimal()+
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 14, face = "bold"),
+    legend.position = "top"
+  ) 
+
+
+long_data <- historicalfamtable %>%
+  pivot_longer(
+    cols = -Year, 
+    names_to = "Category", 
+    values_to = "Value"
+  )
+long_data
+
+# Create the grouped bar chart
+ggplot(long_data, aes(x = factor(Year), y = Value, fill = Category)) +
+  geom_bar(stat = "identity", position = "dodge", width = 0.7) +
+  labs(
+    title = "Labor Force Status Trends (2020-2024)",
+    x = "Year",
+    y = "Number (in thousands)",
+    fill = "Category"
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 14, face = "bold"),
+    legend.position = "right"
+  ) 
+
+print(cpi_summary)
+print(combined_pp_hh_data)
+
+```
+#### Regression 
+```{r}
+library(dplyr)
+
+# Ensure the dataset is correct with only valid rows
+historicalfamtable <- historicalfamtable %>%
+  filter(Year %in% c(2020, 2021, 2022, 2023)) # Keep only valid rows
+
+# Step 1: Add a row for 2024 with NA values for numeric columns
+historicalfamtable <- historicalfamtable %>%
+  bind_rows(data.frame(Year = 2024,
+                       All.Married.Couple.in.Labor.Force = NA_real_,
+                       Husband.and.Wife.in.Labor.Force = NA_real_,
+                       Husband.only.in.labor.force = NA_real_,
+                       Wife.only.in.labor.force = NA_real_,
+                       Husband.and.wife.both.not.labor.force = NA_real_))
+
+# Step 2: Calculate the Compound Annual Growth Rate (CAGR) for each numeric column (excluding NA values)
+growth_rates <- historicalfamtable %>%
+  filter(Year >= 2020 & Year <= 2023) %>%
+  summarize(across(where(is.numeric), ~ ((last(.x) / first(.x))^(1 / (2023 - 2020)) - 1)))
+
+# Step 3: Predict 2024 values using the growth rates
+historicalfamtable <- historicalfamtable %>%
+  arrange(Year) %>% # Ensure rows are in chronological order
+  mutate(across(where(is.numeric), 
+                ~ ifelse(Year == 2024, 
+                         lag(.x, 1) * (1 + growth_rates[[cur_column()]]), 
+                         .x)))
+
+historicalfamtable <- historicalfamtable %>%
+  mutate(Year = as.integer(Year))
+# View the updated dataset
+print(historicalfamtable)
+
+
+
+combined_data <- merge(cpi_summary, combined_pp_hh_data, by = "Year", all = TRUE)
+combined_data <- merge(combined_data, historicalfamtable, by = "Year", all = TRUE)
+combined_data
+
+
+```
+```{r}
+# Load necessary packages
+library(broom)   # For cleaning regression outputs
+library(ggplot2) # For visualization
+library(caret)
+library(dplyr)   # For data manipulation
+
+# Model 1: Regression for Average Person Income
+model_person_income <- lm(
+  Average_Person_Income ~ Average_Rent + Average_Food_Beverages + 
+    Average_Medical_Care + All.Married.Couple.in.Labor.Force,
+  data = combined_data
+)
+
+# Model 2: Regression for Average Household Income
+model_household_income <- lm(
+  Average_Household_Income ~ Average_Rent + Average_Food_Beverages + 
+    Average_Medical_Care + All.Married.Couple.in.Labor.Force,
+  data = combined_data
+)
+
+# Summarize the models
+summary(model_person_income)
+summary(model_household_income)
+
+# Visualize residuals to validate assumptions
+# Residual plot for Model 1
+ggplot(data = augment(model_person_income), aes(.fitted, .resid)) +
+  geom_point() +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "red") +
+  labs(
+    title = "Residual Plot: Model for Person Income",
+    x = "Fitted Values",
+    y = "Residuals"
+  )
+
+# Residual plot for Model 2
+ggplot(data = augment(model_household_income), aes(.fitted, .resid)) +
+  geom_point() +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "red") +
+  labs(
+    title = "Residual Plot: Model for Household Income",
+    x = "Fitted Values",
+    y = "Residuals"
+  )
+
+# Compare with a baseline model
+baseline_person_income <- lm(Average_Person_Income ~ 1, data = combined_data)
+baseline_household_income <- lm(Average_Household_Income ~ 1, data = combined_data)
+
+# Print baseline summaries
+summary(baseline_person_income)
+summary(baseline_household_income)
+
+# Compare adjusted R-squared for models
+adjusted_r_squared <- tibble(
+  Model = c("Person Income", "Household Income", "Baseline (Person)", "Baseline (Household)"),
+  Adjusted_R2 = c(
+    summary(model_person_income)$adj.r.squared,
+    summary(model_household_income)$adj.r.squared,
+    summary(baseline_person_income)$adj.r.squared,
+    summary(baseline_household_income)$adj.r.squared
+  )
+)
+
+print(adjusted_r_squared)
+
+# Cross-validation to test robustness
+set.seed(123)
+cv_person_income <- caret::train(
+  Average_Person_Income ~ Average_Rent + Average_Food_Beverages + 
+    Average_Medical_Care + All.Married.Couple.in.Labor.Force,
+  data = combined_data,
+  method = "lm",
+  trControl = trainControl(method = "cv", number = 5)
+)
+
+cv_household_income <- caret::train(
+  Average_Household_Income ~ Average_Rent + Average_Food_Beverages + 
+    Average_Medical_Care + All.Married.Couple.in.Labor.Force,
+  data = combined_data,
+  method = "lm",
+  trControl = trainControl(method = "cv", number = 5)
+)
+
+# Output cross-validation results
+print(cv_person_income)
+print(cv_household_income)
+
+
+baseline_model <- lm(Average_Person_Income ~ Average_Rent, data = combined_data)
+
+# Summary of the baseline model
+summary(baseline_model)
+
+# Expanded model with multiple predictors
+interaction_model <- lm(Average_Person_Income ~ Average_Rent * All.Married.Couple.in.Labor.Force, data = combined_data)
+summary(interaction_model)
+
+cor(combined_data[, c("Average_Rent", "All.Married.Couple.in.Labor.Force")], use = "complete.obs")
+colSums(is.na(combined_data))
+apply(combined_data[, c("Average_Rent", "All.Married.Couple.in.Labor.Force")], 2, sd)
+
+
+
+
+model_simplified <- lm(
+  Average_Person_Income ~ Average_Rent + Average_Medical_Care + 
+    Husband.and.Wife.in.Labor.Force,
+  data = combined_data
+)
+summary(model_simplified)
+aic_med <- AIC(model_simplified)
+aic_med
+aic_baseline
+
+
+
+aic_baseline <- AIC(baseline_model)
+aic_expanded <- AIC(interaction_model)
+
+
+cat("AIC for Baseline Model:", aic_baseline, "\n")
+cat("AIC for Expanded Model:", aic_expanded, "\n")
+cat("AIC for Interaction Model:", aic_med, "\n")
+
+# Compare the models
+if (aic_baseline < aic_expanded) {
+  cat("The Baseline Model is better based on AIC.\n")
+} else {
+  cat("The Expanded Model is better based on AIC.\n")
+}
+```
+
+```{r}
+
+food_model <- lm(Average_Food_Beverages ~ Average_Household_Income + Average_Person_Income, data = combined_data)
+summary(food_model)
+
+
+```
+```{r}
+medical_model <- lm(Average_Medical_Care ~ Average_Household_Income + Average_Person_Income, data = combined_data)
+summary(medical_model)
+
+```
+
+
+*Analysis of the Regression Results*
+The regression results offer valuable insights into the relationship between inflation and income growth:
+
+1. **Rent Model**: The model explained 95.8% of the variance (\( R^2 = 0.9577 \)), with the overall model being statistically significant (\( p = 0.04231 \)). However, neither household income (\( p = 0.929 \)) nor personal income (\( p = 0.104 \)) showed individual statistical significance. These results suggest that factors beyond income—such as housing supply constraints or rental market conditions—may play a more critical role in driving rent inflation.
+
+2. **Food & Beverages Model**: This model explained 86.4% of the variance (\( R^2 = 0.8642 \)), but the overall model (\( p = 0.1358 \)) and individual predictors (\( p > 0.26 \)) were not statistically significant. This indicates that external factors, such as supply chain disruptions and agricultural costs, are likely the primary drivers of food inflation.
+
+3. **Medical Care Model**: The model explained 90.7% of the variance (\( R^2 = 0.9072 \)) and was marginally significant (\( p = 0.09277 \)). However, neither income variable showed individual significance (\( p > 0.29 \)), reflecting systemic challenges in healthcare pricing rather than income-driven effects.
+
+4. **Purchasing Power Model**: The model explained 83.9% of the variance (\( R^2 = 0.8394 \)) but failed to achieve statistical significance, suggesting a disconnect between income trends and adjustments in purchasing power.
+
+
+#### Validation 
+```{r}
+models <- list(
+  Rent_Model = rent_model,
+  Food_Model = food_model,
+  Medical_Model = medical_model,
+  Purchasing_Model = purchasing_model
+)
+
+# Residual plots for each model
+par(mfrow = c(2, 2)) # Arrange plots in a grid
+
+# Residuals for Rent Model
+plot(models$Rent_Model, which = 1, main = "Residuals vs Fitted (Rent)")
+
+# Residuals for Food & Beverages Model
+plot(models$Food_Model, which = 1, main = "Residuals vs Fitted (Food & Beverages)")
+
+# Residuals for Medical Care Model
+plot(models$Medical_Model, which = 1, main = "Residuals vs Fitted (Medical Care)")
+
+# Residuals for Purchasing Power Model
+plot(models$Purchasing_Model, which = 1, main = "Residuals vs Fitted (Purchasing Power)")
+
+# Reset plot layout
+par(mfrow = c(1, 1))
+
+
+```
+To ensure the reliability of the regression results, residual analysis was conducted. Residual plots revealed no strong patterns or systematic trends, supporting the assumptions of linearity, homoscedasticity, and independence. However, given the small sample size, caution is warranted as subtle violations of these assumptions may not be fully detectable.
+
+Bootstrapping further validated the robustness of the regression coefficients. For instance, in the Rent model, the coefficient for Average Household Income (\(-4.49 \times 10^{-4}\)) exhibited a small bias (\(2.47 \times 10^{-3}\)) and a standard error of \(3.50 \times 10^{-2}\), indicating minimal deviation between the original and resampled estimates. Similarly, coefficients in the Food & Beverages model remained consistent, though higher standard errors reflected greater uncertainty in this category. These results reinforce confidence in the regression findings while highlighting the potential benefits of expanding the dataset.
+
+#### Bootstrapping for Robustness
+```{r}
+library(boot)
+
+# Function to bootstrap coefficients
+boot_fn <- function(data, indices, formula) {
+  d <- data[indices, ] # Resample data
+  model <- lm(formula, data = d)
+  coef(model)
+}
+
+# Bootstrapping for Rent Model
+boot_rent <- boot(
+  data = combined_data,
+  statistic = boot_fn,
+  R = 1000,
+  formula = Average_Rent ~ Average_Household_Income + Average_Person_Income
+)
+
+# Bootstrapping for Food & Beverages Model
+boot_food <- boot(
+  data = combined_data,
+  statistic = boot_fn,
+  R = 1000,
+  formula = Average_Food_Beverages ~ Average_Household_Income + Average_Person_Income
+)
+
+# Print bootstrap results
+print(boot_rent)
+print(boot_food)
+
+```
+
+
+#### Baseline Comparison
+
+```{r}
+# Calculate constant income growth rate
+income_growth <- combined_data %>%
+  mutate(
+    Income_Growth_HH = (Average_Household_Income - lag(Average_Household_Income)) / lag(Average_Household_Income),
+    Income_Growth_PP = (Average_Person_Income - lag(Average_Person_Income)) / lag(Average_Person_Income)
+  )
+
+# Fit baseline models
+baseline_rent <- lm(Average_Rent ~ Income_Growth_HH + Income_Growth_PP, data = income_growth)
+baseline_food <- lm(Average_Food_Beverages ~ Income_Growth_HH + Income_Growth_PP, data = income_growth)
+
+# Compare baseline and full models using AIC
+aic_comparison <- data.frame(
+  Model = c("Full Rent Model", "Baseline Rent Model", "Full Food Model", "Baseline Food Model"),
+  AIC = c(
+    AIC(models$Rent_Model),
+    AIC(baseline_rent),
+    AIC(models$Food_Model),
+    AIC(baseline_food)
+  )
+)
+
+# Display AIC comparison
+print(aic_comparison)
+
+
+```
+A baseline model assuming constant income growth was compared to the full regression models using Akaike Information Criterion (AIC). For the Rent model, the full model (AIC = 40.02) outperformed the baseline model (AIC = 41.45), demonstrating that inflation predictors such as CPI growth rates significantly enhance explanatory power. Conversely, for the Food & Beverages model, the baseline model (AIC = 37.57) slightly outperformed the full model (AIC = 43.53), suggesting that income growth alone may adequately explain inflation trends in this category or that additional variables may improve the full model.
+
+This comparison underscores the importance of context. Detailed predictors improve performance for some categories, such as Rent, where inflation appears to decouple from income trends. However, for categories like Food & Beverages, simpler models may suffice.
+
+## Conclusion 
+The findings reveal nuanced relationships between inflation trends and income growth in the post-pandemic U.S. economy. While inflationary pressures in some categories, such as Rent, appear decoupled from income trends, others, such as Food & Beverages, exhibit closer alignment. The analysis highlights potential affordability challenges, as income growth has lagged inflation in critical categories, exacerbating economic inequality.
+
+Future research could benefit from more granular data, including regional and demographic breakdowns, to uncover localized disparities. Additionally, incorporating variables such as policy interventions, unemployment rates, and supply chain indices could enhance explanatory power. These insights contribute to a broader understanding of how inflation impacts income dynamics and inform policy measures aimed at promoting equitable economic recovery.
+
+
+
+
+
